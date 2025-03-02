@@ -102,24 +102,86 @@ class ToDo {
     };
 
     /**
-     * Event handler helper for adding a task to the DOM.
-     * This relies on the pre-existing form's input values.
+     * Pure function for adding a task.
      * 
-     * @param {Object} task - form's values as an object
+     * @param {Object} newTask - form's values as an object
      */
-    addTask = (task) => {
-        const task_id = this.tasks.length;
-        const created_date = new Date().toISOString();
-        const newTask = { ... task, task_id, created_date };
-        const newTaskEl = this.renderListRowItem(newTask);
-        const listParent = document.getElementById('tasks-list');
+    addTask = async (newTask) => {
+        try {
+            const { task_name, status } = newTask;
+            await this.tasksService.addTask({ task_name, status }); // we just want the name and status
+            this.tasks.push(newTask); // push task with all its parts
+        } catch (err) {
+            console.loh(err);
+            alert('Unable to add task. Please try again later.');
+        }
+    };
 
-        this.tasks.push(newTask);
+    /**
+     * DOM Event handler helper for adding a task to the DOM.
+     * 
+     * @param {number} taskId - id of the task to add
+     */
+    _addTaskEventHandler = () => {
+        const taskInput = document.getElementById('formInputTaskName');
+        const task_name = taskInput.value;
+
+        const statusSelect = document.getElementById('formSelectStatus');
+        const options = statusSelect.options;
+        const selectedIndex = statusSelect.selectedIndex;
+        const status = options[selectedIndex].text;
+
+        // validation checks
+        if (!task_name) {
+            alert('Please enter a task name.');
+            return;
+        }
+
+        const task = { task_name, status }; // assemble the new task parts
+        const { newTask, newTaskEl } = this.createNewTaskEl(task); // add task to list
+
+        this.addTask(newTask);
+
+        const listParent = document.getElementById('tasks-list');
 
         if (listParent) {
             listParent.appendChild(newTaskEl);
         } else {
             this.renderList();
+        }
+        taskInput.value = ''; // clear form text input
+    };
+
+    /**
+     * Create the DOM element for the new task with all its parts.
+     * 
+     * @param {Object} task - { task_name, status } partial status object
+     */
+    createNewTaskEl = (task) => {
+        const task_id = this.tasks.length;
+        const created_date = new Date().toISOString();
+        const newTask = { ... task, task_id, create_date };
+        const newTaskEl = this.renderListRowItem(newTask);
+
+        return { newTask, newTaskEl };
+    };
+
+    /**
+     * Pure function for deleting a task.
+     * 
+     * @param {number} taskId - id for the task to be deleted
+     */
+    deleteTask = async (taskId) => {
+        try {
+            const res = await this.tasksService.deleteTask(taskId);
+            this.tasks = this.tasks.filter((task) => task.task_id !== taskId);
+
+            if (res !== null) {
+                alert('Task deleted successfully!');
+            }
+            return res;
+        } catch (err) {
+            alert('Unable to delete task. Please try again later.');
         }
     };
 
@@ -129,27 +191,15 @@ class ToDo {
      * 
      * @param {number} taskId - id of the task to delete
      */
-    _deleteEventHandler = (taskId) => async () => {
-        this.tasks = this.tasks.filter((task) => task.task_id !== taskId);
+    _deleteEventHandler = (taskId) => () => {
         const task = document.getElementById(`task-${taskId}`);
         task.remove();
 
-        try {
-            const res = await this.tasksService.deleteTask(taskId);
-            const index = this.tasks.map((task) => task.task_id).indexOf(taskId);
-            this.tasks.splice(index, 1);
-
-            if (res !== null) {
-                alert('Task deleted successfully!');
-            }
-
+        this.deleteTask(taskId).then(() => {
             if (!this.tasks.length) {
                 this.renderMsg();
             }
-        } catch (err) {
-            console.log(err);
-            alert('Unable to delete task. Please try again later');
-        }
+        });
     };
 
     /**
